@@ -72,22 +72,19 @@ interface LoadingProgressProps {
 }
 
 export function LoadingProgress({ active, repoUrl }: LoadingProgressProps) {
+  if (!active) return null;
+
+  return <ActiveLoadingProgress repoUrl={repoUrl} />;
+}
+
+function ActiveLoadingProgress({ repoUrl }: { repoUrl?: string }) {
   const [currentStep, setCurrentStep] = useState(0);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
-  const [progress, setProgress] = useState(0);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(
+    () => new Set()
+  );
+  const [progress, setProgress] = useState(2);
 
   useEffect(() => {
-    if (!active) {
-      setCurrentStep(0);
-      setCompletedSteps(new Set());
-      setProgress(0);
-      return;
-    }
-
-    setCurrentStep(0);
-    setCompletedSteps(new Set());
-    setProgress(2);
-
     let stepIndex = 0;
     let elapsed = 0;
     const tickMs = 100;
@@ -109,16 +106,7 @@ export function LoadingProgress({ active, repoUrl }: LoadingProgressProps) {
     }, tickMs);
 
     return () => clearInterval(interval);
-  }, [active]);
-
-  useEffect(() => {
-    if (!active && progress > 0) {
-      setProgress(100);
-      setCompletedSteps(new Set(STEPS.map((_, i) => i)));
-    }
-  }, [active, progress]);
-
-  if (!active) return null;
+  }, []);
 
   const repoName = repoUrl
     ? repoUrl.replace(/\/$/, "").split("/").slice(-2).join("/")

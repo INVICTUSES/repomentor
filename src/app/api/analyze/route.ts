@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getToken } from "next-auth/jwt";
-import { getAuthSecret } from "@/lib/auth-config";
 import { fetchRepoContext, fetchRepoMetadata, parseRepoUrl } from "@/lib/github";
 import { analyzeRepo } from "@/lib/ai";
-import { getCached, publicCacheKey, setCached, userCacheKey } from "@/lib/cache";
+import { getCached, publicCacheKey, setCached } from "@/lib/cache";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const maxDuration = 60;
 
@@ -12,19 +11,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const ANONYMOUS_LIMIT = 8;
 const AUTHENTICATED_LIMIT = 20;
 const REFRESH_LIMIT = 2;
-
-type RateLimitBucket = { count: number; resetAt: number };
-
-const rateLimitGlobal = globalThis as typeof globalThis & {
-  __repomentorRateLimit?: Map<string, RateLimitBucket>;
-};
-
-function getRateLimitStore(): Map<string, RateLimitBucket> {
-  if (!rateLimitGlobal.__repomentorRateLimit) {
-    rateLimitGlobal.__repomentorRateLimit = new Map();
-  }
-  return rateLimitGlobal.__repomentorRateLimit;
-}
+const MAX_BODY_BYTES = 4096;
 
 function getClientIp(req: NextRequest): string {
   const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
@@ -36,24 +23,47 @@ function getClientIp(req: NextRequest): string {
   );
 }
 
-function checkRateLimit(key: string, limit: number): boolean {
-  const store = getRateLimitStore();
-  const now = Date.now();
-  const existing = store.get(key);
-
-  if (!existing || now > existing.resetAt) {
-    store.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-
-  if (existing.count >= limit) return false;
-  existing.count += 1;
-  return true;
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const contentLength = Number(req.headers.get("content-length") ?? "0");
+    if (contentLength > MAX_BODY_BYTES) {
+      return NextResponse.json(
+        { error: "Request body is too large." },
+        { status: 413 }
+      );
+    }
+
+    const ipKey = `ip:${getClientIp(req)}`;
+    const preflightAllowed = await checkRateLimit({
+      key: `analyze:preflight:${ipKey}`,
+      limit: ANONYMOUS_LIMIT,
+      windowSeconds: RATE_LIMIT_WINDOW_MS / 1000,
+    });
+
+    if (!preflightAllowed) {
+      return NextResponse.json(
+        { error: "Too many analysis requests. Please wait a minute and try again." },
+        { status: 429 }
+      );
+    }
+
+    const rawBody = await req.text();
+    if (rawBody.length > MAX_BODY_BYTES) {
+      return NextResponse.json(
+        { error: "Request body is too large." },
+        { status: 413 }
+      );
+    }
+
+    let body: { url?: unknown; refresh?: unknown };
+    try {
+      body = JSON.parse(rawBody) as { url?: unknown; refresh?: unknown };
+    } catch {
+      return NextResponse.json(
+        { error: "Request body must be valid JSON." },
+        { status: 400 }
+      );
+    }
     const url = body?.url;
     const refresh = body?.refresh === true;
 
@@ -66,14 +76,17 @@ export async function POST(req: NextRequest) {
 
     const { owner, repo } = parseRepoUrl(url);
     const session = await auth();
-    const jwt = await getToken({ req, secret: getAuthSecret() });
-    const githubToken =
-      typeof jwt?.accessToken === "string" ? jwt.accessToken : undefined;
-    const userId = jwt?.sub ?? session?.user?.email ?? null;
-    const requesterKey = userId ? `session:${userId}` : `ip:${getClientIp(req)}`;
+    const userId = session?.user?.email ?? null;
+    const requesterKey = userId ? `session:${userId}` : ipKey;
     const baseLimit = userId ? AUTHENTICATED_LIMIT : ANONYMOUS_LIMIT;
 
-    if (!checkRateLimit(`analyze:${requesterKey}`, baseLimit)) {
+    const allowed = await checkRateLimit({
+      key: `analyze:${requesterKey}`,
+      limit: baseLimit,
+      windowSeconds: RATE_LIMIT_WINDOW_MS / 1000,
+    });
+
+    if (!allowed) {
       return NextResponse.json(
         { error: "Too many analysis requests. Please wait a minute and try again." },
         { status: 429 }
@@ -87,7 +100,12 @@ export async function POST(req: NextRequest) {
           { status: 401 }
         );
       }
-      if (!checkRateLimit(`refresh:${requesterKey}`, REFRESH_LIMIT)) {
+      const refreshAllowed = await checkRateLimit({
+        key: `refresh:${requesterKey}`,
+        limit: REFRESH_LIMIT,
+        windowSeconds: RATE_LIMIT_WINDOW_MS / 1000,
+      });
+      if (!refreshAllowed) {
         return NextResponse.json(
           { error: "Too many refresh requests. Please wait a minute and try again." },
           { status: 429 }
@@ -95,29 +113,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const metadata = await fetchRepoMetadata(owner, repo, githubToken);
-    if (metadata.isPrivate && !githubToken) {
+    const metadata = await fetchRepoMetadata(owner, repo);
+    if (metadata.isPrivate) {
       return NextResponse.json(
-        { error: "Private repositories require GitHub sign-in." },
-        { status: 401 }
+        { error: "RepoMentor currently analyzes public repositories only." },
+        { status: 403 }
       );
     }
 
-    const key =
-      metadata.isPrivate && userId
-        ? userCacheKey(userId, owner, repo)
-        : publicCacheKey(owner, repo);
+    const key = publicCacheKey(owner, repo);
 
     if (!refresh) {
       const cached = getCached(key);
       if (cached) return NextResponse.json({ ...cached, cached: true });
     }
 
-    const ctx = await fetchRepoContext(url, githubToken);
-    if (!githubToken && ctx.isPrivate) {
+    const ctx = await fetchRepoContext(url);
+    if (ctx.isPrivate) {
       return NextResponse.json(
-        { error: "Private repositories require GitHub sign-in." },
-        { status: 401 }
+        { error: "RepoMentor currently analyzes public repositories only." },
+        { status: 403 }
       );
     }
 
@@ -147,10 +162,12 @@ export async function POST(req: NextRequest) {
       ? 400
       : message.includes("not found")
         ? 404
-        : message.includes("rate limit")
-          ? 429
-          : message.includes("access denied")
-            ? 403
+      : message.includes("rate limit")
+        ? 429
+        : message.includes("Rate limiter")
+          ? 503
+        : message.includes("access denied")
+          ? 403
             : message.includes("AI response")
               ? 502
               : 500;

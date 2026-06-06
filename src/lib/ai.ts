@@ -114,7 +114,22 @@ export async function analyzeRepo(ctx: RepoContext): Promise<RepoAnalysis> {
     parsed.techStack = detectTechStack(ctx.fileTree, ctx.keyFiles, ctx.language);
   }
 
-  return parseRepoAnalysis(parsed);
+  return parseRepoAnalysis(enforceIssueUrls(ctx, parsed));
+}
+
+function enforceIssueUrls(ctx: RepoContext, analysis: RepoAnalysis): RepoAnalysis {
+  const knownIssueNumbers = new Set(ctx.issues.map((issue) => issue.number));
+  const recommendedIssues = analysis.recommendedIssues
+    .filter((issue) => knownIssueNumbers.has(issue.issueNumber))
+    .map((issue) => ({
+      ...issue,
+      url: `${ctx.url}/issues/${issue.issueNumber}`,
+    }));
+
+  return {
+    ...analysis,
+    recommendedIssues,
+  };
 }
 
 function generateFallbackAnalysis(ctx: RepoContext): RepoAnalysis {
@@ -142,7 +157,7 @@ function generateFallbackAnalysis(ctx: RepoContext): RepoAnalysis {
         : "Available open issue to explore",
     }));
 
-  return parseRepoAnalysis({
+  return parseRepoAnalysis(enforceIssueUrls(ctx, {
     summary: `${ctx.owner}/${ctx.repo} is an open-source project${
       ctx.description ? `: ${ctx.description}` : ""
     }. It has ${ctx.stars.toLocaleString()} stars and uses ${
@@ -197,5 +212,5 @@ function generateFallbackAnalysis(ctx: RepoContext): RepoAnalysis {
       "Ask questions — maintainers appreciate engaged contributors",
       "Start with documentation or test improvements if code feels overwhelming",
     ],
-  });
+  }));
 }
