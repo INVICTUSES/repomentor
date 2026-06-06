@@ -23,6 +23,49 @@ function getClientIp(req: NextRequest): string {
   );
 }
 
+async function readLimitedBody(req: NextRequest): Promise<string> {
+  if (!req.body) return "";
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_BODY_BYTES) {
+      await reader.cancel();
+      throw new Error("Request body is too large");
+    }
+    chunks.push(value);
+  }
+
+  const bodyBytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new TextDecoder().decode(bodyBytes);
+}
+
+function getErrorStatus(message: string): number {
+  if (message.includes("Invalid GitHub URL") || message.includes("repository URL")) {
+    return 400;
+  }
+  if (message.includes("not found")) return 404;
+  if (message.includes("too large")) return 413;
+  if (message.includes("rate limit")) return 429;
+  if (message.includes("Rate limiter")) return 503;
+  if (message.includes("access denied")) return 403;
+  if (message.includes("AI response")) return 502;
+  return 500;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const contentLength = Number(req.headers.get("content-length") ?? "0");
@@ -47,13 +90,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const rawBody = await req.text();
-    if (rawBody.length > MAX_BODY_BYTES) {
-      return NextResponse.json(
-        { error: "Request body is too large." },
-        { status: 413 }
-      );
-    }
+    const rawBody = await readLimitedBody(req);
 
     let body: { url?: unknown; refresh?: unknown };
     try {
@@ -158,19 +195,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Analysis failed";
-    const status = message.includes("Invalid GitHub URL") || message.includes("repository URL")
-      ? 400
-      : message.includes("not found")
-        ? 404
-      : message.includes("rate limit")
-        ? 429
-        : message.includes("Rate limiter")
-          ? 503
-        : message.includes("access denied")
-          ? 403
-            : message.includes("AI response")
-              ? 502
-              : 500;
+    const status = getErrorStatus(message);
     const error =
       status === 500
         ? "Analysis failed. Please try again later."
