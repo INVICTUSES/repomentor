@@ -1,0 +1,198 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0a0a0f;
+  --color-surface: #12121a;
+  --color-surface-elevated: #1a1a26;
+  --color-border: #2a2a3a;
+  --color-muted: #8888a0;
+  --color-foreground: #f0f0f5;
+  --color-accent: #6c5ce7;
+  --color-accent-light: #a29bfe;
+  --color-success: #00b894;
+  --color-warning: #fdcb6e;
+  --color-danger: #e17055;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px color-mix(in srgb, var(--color-accent) 20%, transparent); }
+  50% { box-shadow: 0 0 40px color-mix(in srgb, var(--color-accent) 40%, transparent); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes float-orb {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -40px) scale(1.05); }
+  66% { transform: translate(-20px, 20px) scale(0.95); }
+}
+
+@keyframes float-symbol {
+  0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.15; }
+  90% { opacity: 0.15; }
+  100% { transform: translateY(-20vh) rotate(15deg); opacity: 0; }
+}
+
+@keyframes scan {
+  0% { top: -10%; opacity: 0; }
+  10% { opacity: 0.4; }
+  90% { opacity: 0.4; }
+  100% { top: 110%; opacity: 0; }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-accent) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 6%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black, transparent);
+}
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  animation: float-orb 18s ease-in-out infinite;
+}
+
+.orb-1 {
+  width: 400px;
+  height: 400px;
+  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+  top: -10%;
+  left: -5%;
+}
+
+.orb-2 {
+  width: 350px;
+  height: 350px;
+  background: color-mix(in srgb, #74b9ff 20%, transparent);
+  top: 40%;
+  right: -10%;
+  animation-delay: -6s;
+  animation-duration: 22s;
+}
+
+.orb-3 {
+  width: 300px;
+  height: 300px;
+  background: color-mix(in srgb, var(--color-accent-light) 15%, transparent);
+  bottom: -5%;
+  left: 30%;
+  animation-delay: -12s;
+  animation-duration: 20s;
+}
+
+.floating-symbols {
+  position: absolute;
+  inset: 0;
+}
+
+.floating-symbol {
+  position: absolute;
+  bottom: -5%;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--color-accent-light) 30%, transparent);
+  animation: float-symbol linear infinite;
+  user-select: none;
+}
+
+.scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--color-accent) 40%, transparent),
+    transparent
+  );
+  animation: scan 8s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+.animate-fade-in-delay-1 { animation-delay: 0.1s; opacity: 0; }
+.animate-fade-in-delay-2 { animation-delay: 0.2s; opacity: 0; }
+.animate-fade-in-delay-3 { animation-delay: 0.3s; opacity: 0; }
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--color-accent-light), var(--color-accent), #74b9ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-glow {
+  background: radial-gradient(
+    ellipse 60% 50% at 50% 0%,
+    color-mix(in srgb, var(--color-accent) 15%, transparent),
+    transparent
+  );
+}
+
+.difficulty-beginner { --diff-color: var(--color-success); }
+.difficulty-intermediate { --diff-color: var(--color-warning); }
+.difficulty-advanced { --diff-color: var(--color-danger); }
+
+@media print {
+  body {
+    background: white;
+    color: #111;
+  }
+
+  .hero-glow,
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  [class*="rounded-xl"],
+  [class*="rounded-lg"] {
+    background: #f8f8f8 !important;
+    border-color: #ddd !important;
+  }
+
+  a {
+    color: #333 !important;
+    text-decoration: underline;
+  }
+
+  section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
