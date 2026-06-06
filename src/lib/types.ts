@@ -5,6 +5,7 @@ export interface RepoContext {
   repo: string;
   url: string;
   description: string | null;
+  isPrivate: boolean;
   stars: number;
   forks: number;
   language: string | null;

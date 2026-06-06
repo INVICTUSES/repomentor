@@ -33,8 +33,12 @@ function getStore(): Map<string, CacheEntry> {
   return globalCache.__repomentorCache;
 }
 
-export function cacheKey(owner: string, repo: string): string {
-  return `${owner.toLowerCase()}/${repo.toLowerCase()}`;
+export function publicCacheKey(owner: string, repo: string): string {
+  return `public:${owner.toLowerCase()}/${repo.toLowerCase()}`;
+}
+
+export function userCacheKey(userId: string, owner: string, repo: string): string {
+  return `user:${userId}:${owner.toLowerCase()}/${repo.toLowerCase()}`;
 }
 
 export function getCached(key: string): CachedAnalysis | null {

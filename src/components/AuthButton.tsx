@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { Github, LogOut, Loader2 } from "lucide-react";
 
@@ -22,9 +23,11 @@ export function AuthButton() {
     return (
       <div className="flex items-center gap-3">
         {session.user.image && (
-          <img
+          <Image
             src={session.user.image}
             alt=""
+            width={28}
+            height={28}
             className="w-7 h-7 rounded-full"
           />
         )}

@@ -17,24 +17,23 @@ if [[ -z "${GITHUB_TOKEN:-}" ]]; then
   exit 1
 fi
 
-echo "→ Fetching GitHub user..."
+echo "Fetching GitHub user..."
 USER_JSON=$(curl -sf \
   -H "Authorization: Bearer ${GITHUB_TOKEN}" \
   -H "Accept: application/vnd.github+json" \
   https://api.github.com/user)
 GITHUB_USER=$(echo "$USER_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['login'])")
 
-echo "→ GitHub user: ${GITHUB_USER}"
+echo "GitHub user: ${GITHUB_USER}"
 
 if git remote get-url origin &>/dev/null; then
-  echo "→ Remote 'origin' already configured"
+  echo "Remote 'origin' already configured"
 else
-  REMOTE="https://${GITHUB_TOKEN}@github.com/${GITHUB_USER}/${REPO_NAME}.git"
-  git remote add origin "$REMOTE"
-  echo "→ Added remote origin"
+  git remote add origin "https://github.com/${GITHUB_USER}/${REPO_NAME}.git"
+  echo "Added remote origin"
 fi
 
-echo "→ Creating repo ${GITHUB_USER}/${REPO_NAME} (if needed)..."
+echo "Creating repo ${GITHUB_USER}/${REPO_NAME} (if needed)..."
 HTTP_CODE=$(curl -s -o /tmp/gh-create-repo.json -w "%{http_code}" \
   -X POST \
   -H "Authorization: Bearer ${GITHUB_TOKEN}" \
@@ -43,17 +42,29 @@ HTTP_CODE=$(curl -s -o /tmp/gh-create-repo.json -w "%{http_code}" \
   -d "{\"name\":\"${REPO_NAME}\",\"description\":\"AI-powered GitHub project mentor for beginners\",\"private\":false,\"auto_init\":false}")
 
 if [[ "$HTTP_CODE" == "201" ]]; then
-  echo "→ Repository created"
+  echo "Repository created"
 elif [[ "$HTTP_CODE" == "422" ]]; then
-  echo "→ Repository already exists"
+  echo "Repository already exists"
 else
-  echo "→ Create repo response (${HTTP_CODE}):"
+  echo "Create repo response (${HTTP_CODE}):"
   cat /tmp/gh-create-repo.json
   exit 1
 fi
 
-echo "→ Pushing to GitHub..."
-git push -u origin main
+GIT_ASKPASS_SCRIPT="$(mktemp)"
+trap 'rm -f "$GIT_ASKPASS_SCRIPT"' EXIT
+cat > "$GIT_ASKPASS_SCRIPT" <<'EOF'
+#!/usr/bin/env sh
+case "$1" in
+  *Username*) printf '%s\n' "x-access-token" ;;
+  *Password*) printf '%s\n' "$GITHUB_TOKEN" ;;
+  *) printf '\n' ;;
+esac
+EOF
+chmod +x "$GIT_ASKPASS_SCRIPT"
+
+echo "Pushing to GitHub..."
+GIT_ASKPASS="$GIT_ASKPASS_SCRIPT" git push -u origin main
 
 echo ""
-echo "✓ Done! https://github.com/${GITHUB_USER}/${REPO_NAME}"
+echo "Done! https://github.com/${GITHUB_USER}/${REPO_NAME}"

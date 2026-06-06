@@ -7,36 +7,67 @@ function headers(token?: string): HeadersInit {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
   };
-  const resolved = token ?? process.env.GITHUB_TOKEN;
-  if (resolved) h.Authorization = `Bearer ${resolved}`;
+  if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
 
 async function ghFetch<T>(path: string, token?: string): Promise<T> {
   const res = await fetch(`${GITHUB_API}${path}`, { headers: headers(token) });
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`GitHub API error ${res.status}: ${body.slice(0, 200)}`);
+    if (res.status === 404) throw new Error("GitHub repository not found or not accessible");
+    if (res.status === 403) throw new Error("GitHub rate limit reached or access denied");
+    throw new Error(`GitHub request failed with status ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
 
 export function parseRepoUrl(url: string): { owner: string; repo: string } {
-  const cleaned = url.trim().replace(/\/$/, "");
-  const match = cleaned.match(
-    /github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/.*)?$/
-  );
-  if (!match) throw new Error("Invalid GitHub URL. Example: https://github.com/owner/repo");
-  return { owner: match[1], repo: match[2].replace(/\.git$/, "") };
+  let parsed: URL;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    throw new Error("Invalid GitHub URL. Example: https://github.com/owner/repo");
+  }
+
+  if (parsed.protocol !== "https:" || parsed.hostname.toLowerCase() !== "github.com") {
+    throw new Error("Invalid GitHub URL. Example: https://github.com/owner/repo");
+  }
+
+  const parts = parsed.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+  if (parts.length !== 2) {
+    throw new Error("Use a repository URL like https://github.com/owner/repo");
+  }
+
+  const [owner, rawRepo] = parts;
+  const repo = rawRepo.replace(/\.git$/, "");
+  const namePattern = /^[A-Za-z0-9_.-]+$/;
+  if (!namePattern.test(owner) || !namePattern.test(repo) || owner.startsWith(".") || repo.startsWith(".")) {
+    throw new Error("Use a valid GitHub owner and repository name");
+  }
+
+  return { owner, repo };
 }
 
 interface RepoMeta {
+  private: boolean;
   description: string | null;
   stargazers_count: number;
   forks_count: number;
   language: string | null;
   topics?: string[];
   default_branch: string;
+}
+
+export interface RepoMetadata {
+  owner: string;
+  repo: string;
+  isPrivate: boolean;
+  description: string | null;
+  stars: number;
+  forks: number;
+  language: string | null;
+  topics: string[];
+  defaultBranch: string;
 }
 
 interface TreeItem {
@@ -78,6 +109,26 @@ const KEY_FILES = [
   ".github/workflows",
 ];
 
+export async function fetchRepoMetadata(
+  owner: string,
+  repo: string,
+  githubToken?: string
+): Promise<RepoMetadata> {
+  const meta = await ghFetch<RepoMeta>(`/repos/${owner}/${repo}`, githubToken);
+
+  return {
+    owner,
+    repo,
+    isPrivate: meta.private,
+    description: meta.description,
+    stars: meta.stargazers_count,
+    forks: meta.forks_count,
+    language: meta.language,
+    topics: meta.topics ?? [],
+    defaultBranch: meta.default_branch,
+  };
+}
+
 async function fetchReadme(owner: string, repo: string, token?: string): Promise<string> {
   try {
     const res = await fetch(
@@ -116,11 +167,11 @@ export async function fetchRepoContext(
 ): Promise<RepoContext> {
   const { owner, repo } = parseRepoUrl(url);
 
-  const meta = await ghFetch<RepoMeta>(`/repos/${owner}/${repo}`, githubToken);
+  const meta = await fetchRepoMetadata(owner, repo, githubToken);
 
   const [treeData, issues] = await Promise.all([
     ghFetch<TreeResponse>(
-      `/repos/${owner}/${repo}/git/trees/${meta.default_branch}?recursive=1`,
+      `/repos/${owner}/${repo}/git/trees/${meta.defaultBranch}?recursive=1`,
       githubToken
     ),
     ghFetch<IssueItem[]>(
@@ -172,11 +223,12 @@ export async function fetchRepoContext(
     repo,
     url: `https://github.com/${owner}/${repo}`,
     description: meta.description,
-    stars: meta.stargazers_count,
-    forks: meta.forks_count,
+    isPrivate: meta.isPrivate,
+    stars: meta.stars,
+    forks: meta.forks,
     language: meta.language,
-    topics: meta.topics ?? [],
-    defaultBranch: meta.default_branch,
+    topics: meta.topics,
+    defaultBranch: meta.defaultBranch,
     readme: readme.slice(0, 12000),
     fileTree,
     keyFiles,
