@@ -7,7 +7,21 @@ const DIFFICULTY_STYLES = {
   advanced: "difficulty-advanced bg-[var(--color-danger)]/15 text-[var(--color-danger)] border-[var(--color-danger)]/30",
 };
 
-export function IssueRecommendations({ issues }: { issues: IssueRecommendation[] }) {
+interface IssueRecommendationsProps {
+  issues: IssueRecommendation[];
+  repoOwner: string;
+  repoName: string;
+}
+
+function issueHref(repoOwner: string, repoName: string, issueNumber: number): string {
+  return `https://github.com/${repoOwner}/${repoName}/issues/${issueNumber}`;
+}
+
+export function IssueRecommendations({
+  issues,
+  repoOwner,
+  repoName,
+}: IssueRecommendationsProps) {
   if (!issues.length) {
     return (
       <section>
@@ -32,7 +46,7 @@ export function IssueRecommendations({ issues }: { issues: IssueRecommendation[]
         {issues.map((issue) => (
           <a
             key={issue.issueNumber}
-            href={issue.url}
+            href={issueHref(repoOwner, repoName, issue.issueNumber)}
             target="_blank"
             rel="noopener noreferrer"
             className="block bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 hover:border-[var(--color-accent)]/50 transition-colors group"
