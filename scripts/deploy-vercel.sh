@@ -12,18 +12,29 @@ if [[ -f .env.local ]]; then
 fi
 
 if [[ -z "${VERCEL_TOKEN:-}" ]]; then
-  echo "No VERCEL_TOKEN found — starting interactive Vercel login..."
+  echo "No VERCEL_TOKEN found. Starting interactive Vercel login..."
   npx vercel@latest login
 else
   export VERCEL_TOKEN
 fi
 
-echo "→ Deploying to Vercel (production)..."
+echo "Deploying to Vercel (production)..."
 npx vercel@latest --prod --yes
 
-echo ""
-echo "→ Set these env vars in the Vercel dashboard if not already configured:"
-echo "   OPENAI_API_KEY, AUTH_SECRET, AUTH_GITHUB_ID, AUTH_GITHUB_SECRET, AUTH_URL, GITHUB_TOKEN"
-echo ""
-echo "→ Update GitHub OAuth callback URL to:"
-echo "   https://YOUR-APP.vercel.app/api/auth/callback/github"
+cat <<'EOF'
+
+Set these runtime environment variables in the Vercel dashboard if they are not already configured:
+  OPENAI_API_KEY
+  AUTH_SECRET
+  AUTH_GITHUB_ID
+  AUTH_GITHUB_SECRET
+  AUTH_URL
+  UPSTASH_REDIS_REST_URL
+  UPSTASH_REDIS_REST_TOKEN
+
+GitHub publishing tokens are only for local publishing scripts.
+Never configure a GitHub token as a Vercel runtime variable.
+
+Update the GitHub OAuth callback URL to:
+  https://YOUR-APP.vercel.app/api/auth/callback/github
+EOF
