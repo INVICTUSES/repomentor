@@ -132,7 +132,11 @@ export function AnalysisResults({ repo, analysis }: AnalysisResultsProps) {
       </section>
 
       <FolderGuide folders={analysis.folderGuide} />
-      <IssueRecommendations issues={analysis.recommendedIssues} />
+      <IssueRecommendations
+        issues={analysis.recommendedIssues}
+        repoOwner={repo.owner}
+        repoName={repo.name}
+      />
       <LearningPath steps={analysis.learningPath} />
       <PRChecklist
         checklist={analysis.prChecklist}
