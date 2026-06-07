@@ -1,6 +1,7 @@
 import type { FileNode, GitHubIssue, RepoContext } from "./types";
 
 const GITHUB_API = "https://api.github.com";
+const MAX_TREE_ITEMS = 10_000;
 
 function headers(token?: string): HeadersInit {
   const h: HeadersInit = {
@@ -78,6 +79,7 @@ interface TreeItem {
 
 interface TreeResponse {
   tree: TreeItem[];
+  truncated?: boolean;
 }
 
 interface IssueItem {
@@ -179,6 +181,12 @@ export async function fetchRepoContext(
       githubToken
     ),
   ]);
+
+  if (treeData.truncated || treeData.tree.length > 10000) {
+    throw new Error(
+      `Repository is too large to analyze safely. RepoMentor supports up to ${MAX_TREE_ITEMS.toLocaleString()} tree items.`
+    );
+  }
 
   const readme = await fetchReadme(owner, repo, githubToken);
 
