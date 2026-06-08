@@ -32,8 +32,8 @@ Set these runtime environment variables in the Vercel dashboard if they are not 
   UPSTASH_REDIS_REST_URL
   UPSTASH_REDIS_REST_TOKEN
 
-GitHub publishing tokens are only for local publishing scripts.
-Never configure a GitHub token as a Vercel runtime variable.
+Repository publishing credentials are only for local publishing scripts.
+Never configure local publishing credentials as Vercel runtime variables.
 
 Update the GitHub OAuth callback URL to:
   https://YOUR-APP.vercel.app/api/auth/callback/github
