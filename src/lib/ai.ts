@@ -88,7 +88,7 @@ Rules:
 
 export async function analyzeRepo(ctx: RepoContext): Promise<RepoAnalysis> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  if (!isUsableOpenAIKey(apiKey)) {
     return generateFallbackAnalysis(ctx);
   }
 
@@ -115,6 +115,16 @@ export async function analyzeRepo(ctx: RepoContext): Promise<RepoAnalysis> {
   }
 
   return parseRepoAnalysis(enforceIssueUrls(ctx, parsed));
+}
+
+function isUsableOpenAIKey(apiKey: string | undefined): apiKey is string {
+  if (!apiKey) return false;
+
+  const trimmed = apiKey.trim();
+  return (
+    trimmed.startsWith("sk-") &&
+    !/your-openai-api-key|placeholder|example|test/i.test(trimmed)
+  );
 }
 
 function enforceIssueUrls(ctx: RepoContext, analysis: RepoAnalysis): RepoAnalysis {
@@ -149,7 +159,7 @@ function generateFallbackAnalysis(ctx: RepoContext): RepoAnalysis {
       title: i.title,
       url: i.url,
       difficulty: "beginner" as const,
-      difficultyReason: "Open issue — review description for scope",
+      difficultyReason: "Open issue - review description for scope",
       skillsNeeded: [ctx.language ?? "programming"].filter(Boolean) as string[],
       estimatedHours: "2-8 hours",
       whyGoodFirst: i.labels.length
@@ -176,7 +186,7 @@ function generateFallbackAnalysis(ctx: RepoContext): RepoAnalysis {
     ],
     folderGuide: folders.slice(0, 6).map((f) => ({
       path: `${f}/`,
-      purpose: `Top-level ${f} directory — inspect files for details`,
+      purpose: `Top-level ${f} directory - inspect files for details`,
       keyFiles: ctx.fileTree
         .filter((n) => n.path.startsWith(f + "/") && n.type === "file")
         .slice(0, 5)
@@ -209,7 +219,7 @@ function generateFallbackAnalysis(ctx: RepoContext): RepoAnalysis {
     beginnerFriendlyScore: gfiIssues.length >= 3 ? 8 : gfiIssues.length >= 1 ? 6 : 4,
     contributionTips: [
       "Introduce yourself in a discussion or issue before starting big work",
-      "Ask questions — maintainers appreciate engaged contributors",
+      "Ask questions - maintainers appreciate engaged contributors",
       "Start with documentation or test improvements if code feels overwhelming",
     ],
   }));
